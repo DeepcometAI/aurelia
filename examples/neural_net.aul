@@ -1,0 +1,109 @@
+# neural_net.aul - Simple Neural Network Example
+
+@paper { title: "Simple Feedforward Network", version: "0.1.0" }
+
+type Batch = Dim<symbol: "B", range: 1..4096>
+type Input = Dim<symbol: "I", value: 784>
+type Hidden = Dim<symbol: "H", value: 256>
+type Output = Dim<symbol: "O", value: 10>
+
+struct NeuralNet {
+    w1: tensor<[Input, Hidden], f32>
+    b1: tensor<[Hidden], f32>
+    w2: tensor<[Hidden, Output], f32>
+    b2: tensor<[Output], f32>
+}
+
+@differentiable
+fn relu(x: tensor<[N], f32>) -> tensor<[N], f32> {
+    return max(0.0, x)
+}
+
+@differentiable
+fn softmax(logits: tensor<[N], f32>) -> tensor<[N], f32> {
+    let exp_vals = exp(logits - max(logits))
+    return exp_vals / sum(exp_vals)
+}
+
+fn forward(net: NeuralNet, x: tensor<[Batch, Input], f32>) -> tensor<[Batch, Output], f32> {
+    # Layer 1
+    let h1 = x |> matmul(net.w1) |> add(net.b1) |> relu
+    
+    # Layer 2
+    let out = h1 |> matmul(net.w2) |> add(net.b2)
+    
+    return softmax(out)
+}
+
+@invariant("softmax_sums_to_one")
+fn verify_softmax(output: tensor<[Batch, Output], f32>) -> bool {
+    # Each row should sum to approximately 1.0
+    return all(abs(sum(output, axis=1) - 1.0) < 1e-5)
+}
+
+fn cross_entropy_loss(pred: tensor<[Batch, Output], f32>, 
+                      target: tensor<[Batch], i32>) -> f32 {
+    let n = pred.shape[0]
+    let log_probs = log(pred)
+    
+    # Gather negative log probabilities for correct classes
+    let nll = -sum(log_probs[range(n), target])
+    
+    return nll / n
+}
+
+fn train_step(net: mut NeuralNet, 
+              x: tensor<[Batch, Input], f32>,
+              y: tensor<[Batch], i32>,
+              lr: f32) -> f32 {
+    # Forward pass
+    let pred = forward(net, x)
+    
+    # Compute loss
+    let loss = cross_entropy_loss(pred, y)
+    
+    # Backward pass (automatic differentiation)
+    let grads = autodiff(loss, wrt: [net.w1, net.b1, net.w2, net.b2])
+    
+    # Update weights
+    net.w1 = net.w1 - lr * grads[0]
+    net.b1 = net.b1 - lr * grads[1]
+    net.w2 = net.w2 - lr * grads[2]
+    net.b2 = net.b2 - lr * grads[3]
+    
+    return loss
+}
+
+fn main() -> Result<(), IOError> {
+    print("Neural Network Example in Aurelia")
+    print("=" * 40)
+    
+    # Initialize network with random weights
+    let net = NeuralNet {
+        w1: randn([784, 256]) * 0.01,
+        b1: zeros([256]),
+        w2: randn([256, 10]) * 0.01,
+        b2: zeros([10])
+    }
+    
+    # Training loop
+    let batch_size = 32
+    let learning_rate = 0.001
+    let epochs = 10
+    
+    for epoch in 0..epochs {
+        @parallel for batch in 0..(1000 / batch_size) {
+            let x_batch = load_batch(batch, batch_size)
+            let y_batch = load_labels(batch, batch_size)
+            
+            let loss = train_step(net, x_batch, y_batch, learning_rate)
+            
+            if batch % 10 == 0 {
+                print(f"Epoch {epoch}, Batch {batch}: Loss = {loss:.4f}")
+            }
+        }
+    }
+    
+    print("Training complete!")
+    return Ok(())
+}

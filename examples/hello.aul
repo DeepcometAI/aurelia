@@ -1,0 +1,13 @@
+# hello.aul - Hello World in Aurelia
+
+fn main() -> Result<(), IOError> {
+    print("Hello, Aurelia!")
+    
+    # First-class tensor support
+    let data = [[1.0, 2.0, 3.0],
+                [4.0, 5.0, 6.0],
+                [7.0, 8.0, 9.0]]
+    
+    print(data)
+    return Ok(())
+}
