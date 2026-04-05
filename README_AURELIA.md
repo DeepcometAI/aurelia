@@ -14,6 +14,7 @@
 - CMake ≥ 3.28
 - LLVM ≥ 17, MLIR ≥ 17
 - Python ≥ 3.10
+- Go ≥ 1.22
 
 ### Building from Source
 ```bash
